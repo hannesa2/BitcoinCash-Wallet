@@ -7,6 +7,8 @@ repositories {
     mavenLocal()
 }
 
+def versionNr = '5'
+
 dependencies {
     compile(project(':integration-android')) {
         exclude(group: 'com.google.android', module: 'android')
@@ -50,8 +52,20 @@ android {
     }
 
     defaultConfig {
+        versionCode getGitCommitCount()
+        versionName versionNr + "." + versionCode + "-" + getLatestGitHash()
         generatedDensities = ['hdpi', 'xhdpi']
         vectorDrawables.useSupportLibrary = true
+
+        buildConfigField "String", "GIT_COMMIT_URL", "\"" + getGitCommitUrl() + "\""
+        buildConfigField "String", "GIT_UPSTREAM_COMMIT_URL", "\"" + getUpstreamGitCommitUrl() + "\""
+        buildConfigField "String", "GIT_UPSTREAM_TAG", "\"" + getUpstreamGitTag(getUpstreamGitHash()) + "\""
+        buildConfigField "String", "GIT_REPO_URL", "\"" + getGitRepoUrl() + "\""
+        buildConfigField "String", "GIT_TAG_URL", "\"" + getGitRepoUrl() + "/tags" + "\""
+        buildConfigField "String", "CI_BUILD_ID", "\"" + getBuildId() + "\""
+        buildConfigField "String", "CI_BUILD_URL", "\"" + getBuildUrl() + "\""
+
+        println "BuildUrl: " + getBuildUrl()
     }
 
     buildTypes {
@@ -127,4 +141,70 @@ task svgToPngMipmapProd(type: SvgDrawableTask) {
     targetedDensities = ['hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi']
     outputFormat = 'PNG'
     outputType = 'mipmap'
+}
+
+static def getGitCommitCount() {
+    def process = "git rev-list HEAD --count".execute()
+    return process.text.toInteger() + 17 // magic 17 to make previous squash work with VersionCode
+}
+
+static def getLatestGitHash() {
+    def process = "git rev-parse --short HEAD".execute()
+    return process.text.toString().trim()
+}
+
+static def getGitRepoUrl() {
+// Unfortunately to make it work needs an other Gitlab setup. Gitlab check out with internal hostname, not with external.
+// Cert handling with Apache/Ngnix makes it current impossible
+    if (System.getenv("CI_SERVER")) {
+        return "https://git.mxtracks.info/open-source/bitcoin-wallet"
+    } else {
+        def process = "git remote get-url origin --push".execute()
+        return process.text.toString().replace(".git", "").trim()
+    }
+}
+
+static def getBuildId() {
+    if (System.getenv("CI_SERVER")) {
+        return System.getenv("CI_BUILD_ID")
+    } else {
+        return System.getenv("TRAVIS_BUILD_ID")
+    }
+}
+
+static def getBuildUrl() {
+    if (System.getenv("CI_SERVER")) {
+        return getBuildId()
+    } else {
+        println "buildID:" + "https://travis-ci.org/" + System.getenv("TRAVIS_REPO_SLUG") + "/builds/" + getBuildId()
+        println "TRAVIS_BUILD_DIR:" + System.getenv("TRAVIS_BUILD_DIR")
+        println "TRAVIS_BUILD_ID:" + System.getenv("TRAVIS_BUILD_ID")
+        println "TRAVIS_BUILD_NUMBER:" + System.getenv("TRAVIS_BUILD_NUMBER")
+        println "TRAVIS_COMMIT:" + System.getenv("TRAVIS_COMMIT")
+        println "TRAVIS_COMMIT_MESSAGE:" + System.getenv("TRAVIS_COMMIT_MESSAGE")
+        println "TRAVIS_COMMIT_RANGE:" + System.getenv("TRAVIS_COMMIT_RANGE")
+        println "TRAVIS_JOB_ID:" + System.getenv("TRAVIS_JOB_ID")
+        println "TRAVIS_JOB_NUMBER:" + System.getenv("TRAVIS_JOB_NUMBER")
+        return "https://travis-ci.org/" + System.getenv("TRAVIS_REPO_SLUG") + "/builds/" + getBuildId()
+    }
+}
+
+static def getGitCommitUrl() {
+    return getGitRepoUrl() + "/commit/" + getLatestGitHash()
+}
+
+static def getUpstreamGitHash() {
+    def process = "git rev-parse --short @{-1}".execute()
+    return process.text.toString().trim()
+}
+
+static def getUpstreamGitTag(String hash) {
+    String cmd = "git log " + hash + " --no-walk --tags --pretty=\"%D\" --decorate=full -1"
+    def process = cmd.execute()
+    String result = process.text.toString().split(" ")[1];
+    return result.substring(result.lastIndexOf("/")+1).replace(",","")
+}
+
+static def getUpstreamGitCommitUrl() {
+    return "https://github.com/bitcoin-wallet/bitcoin-wallet/commit/" + getUpstreamGitHash()
 }
