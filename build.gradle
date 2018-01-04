@@ -18,7 +18,7 @@ buildscript {
 }
 
 ext {
-    buildTools = "26.0.3"
+    buildTools = "27.0.2"
     compileSdk = 26
     supportLib = "27.0.2"
 }
